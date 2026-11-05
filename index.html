@@ -251,10 +251,17 @@
         status.className = "pill";
         status.textContent = article.status === "scheduled" ? "Terjadwal (belum dipublikasikan)" : "Draft";
         card.appendChild(status);
-        if (article.bloggerSubmissionRequestedAt) {
+        if (article.bloggerSubmissionStatus) {
           const bloggerStatus = document.createElement("p");
           bloggerStatus.className = "meta";
-          bloggerStatus.textContent = "Blogger: permintaan pernah dikirim pada " + formatDate(article.bloggerSubmissionRequestedAt) + " — status belum terverifikasi. Periksa daftar Draft Blogger sebelum mengirim ulang.";
+          const sentAt = article.bloggerSubmissionRequestedAt ? " · Permintaan: " + formatDate(article.bloggerSubmissionRequestedAt) : "";
+          if (article.bloggerSubmissionStatus === "draft_created") {
+            bloggerStatus.textContent = "Blogger: BERHASIL — draf terkonfirmasi" + (article.bloggerPostId ? " (ID: " + article.bloggerPostId + ")" : "") + (article.bloggerConfirmedAt ? " · Dikonfirmasi: " + formatDate(article.bloggerConfirmedAt) : "");
+          } else if (article.bloggerSubmissionStatus === "failed") {
+            bloggerStatus.textContent = "Blogger: GAGAL — " + (article.bloggerSubmissionError || "backend melaporkan kegagalan") + sentAt;
+          } else {
+            bloggerStatus.textContent = "Blogger: MENUNGGU KONFIRMASI — permintaan pernah dikirim; status belum terverifikasi. Periksa daftar Draft Blogger sebelum mengirim ulang." + sentAt;
+          }
           card.appendChild(bloggerStatus);
         }
         const schedule = document.createElement("p");
