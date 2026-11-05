@@ -1,0 +1,149 @@
+
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#101828">
+  <title>AutoBlogger AI Publisher</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+      font-family: system-ui, sans-serif;
+      color: #f8fafc;
+      background: linear-gradient(145deg, #101828, #172554);
+    }
+    .card {
+      width: 100%;
+      max-width: 430px;
+      padding: 36px 28px;
+      text-align: center;
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 20px;
+      box-shadow: 0 20px 60px #0004;
+    }
+    .logo {
+      width: 64px;
+      height: 64px;
+      display: grid;
+      place-items: center;
+      margin: 0 auto 20px;
+      border-radius: 18px;
+      background: #2563eb;
+      font-size: 30px;
+    }
+    h1 { font-size: 25px; margin: 0 0 12px; }
+    p { color: #cbd5e1; line-height: 1.6; }
+    button {
+      width: 100%;
+      margin-top: 18px;
+      padding: 14px;
+      border: 0;
+      border-radius: 10px;
+      font-size: 15px;
+      font-weight: 650;
+      cursor: pointer;
+    }
+    #loginBtn { background: white; color: #1e293b; }
+    #logoutBtn { background: #334155; color: white; }
+    button:disabled { opacity: .6; cursor: wait; }
+    #status { font-size: 14px; overflow-wrap: anywhere; }
+    .note { font-size: 12px; color: #94a3b8; margin-top: 24px; }
+    [hidden] { display: none !important; }
+  </style>
+</head>
+<body>
+  <main class="card">
+    <div class="logo" aria-hidden="true">✍️</div>
+    <h1>AutoBlogger AI Publisher</h1>
+    <p>Kelola artikel dan jadwal publikasi Blogger dalam satu dashboard.</p>
+
+    <section id="signedOut">
+      <button id="loginBtn">Masuk dengan Google</button>
+    </section>
+
+    <section id="signedIn" hidden>
+      <p id="welcome"></p>
+      <p>Login berhasil. Dashboard artikel akan kita bangun pada tahap berikutnya.</p>
+      <button id="logoutBtn">Keluar</button>
+    </section>
+
+    <p id="status" role="status">Menyiapkan autentikasi...</p>
+    <p class="note">AutoBlogger AI Publisher · Versi awal</p>
+  </main>
+
+  <script type="module">
+    import { initializeApp } from
+      "https://www.gstatic.com/firebasejs/13.2.0/firebase-app.js";
+    import {
+      getAuth,
+      GoogleAuthProvider,
+      signInWithPopup,
+      signOut,
+      onAuthStateChanged
+    } from "https://www.gstatic.com/firebasejs/13.2.0/firebase-auth.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyD4co3OHUuY_ynTb0WdD627v6w4jp4_zJM",
+      authDomain: "autoblogger-ai-publisher.firebaseapp.com",
+      databaseURL: "https://autoblogger-ai-publisher-default-rtdb.asia-southeast1.firebasedatabase.app",
+      projectId: "autoblogger-ai-publisher",
+      storageBucket: "autoblogger-ai-publisher.firebasestorage.app",
+      messagingSenderId: "555142198902",
+      appId: "1:555142198902:web:aec0bbe336f6f31c849157"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const provider = new GoogleAuthProvider();
+
+    const loginBtn = document.getElementById("loginBtn");
+    const logoutBtn = document.getElementById("logoutBtn");
+    const status = document.getElementById("status");
+    const signedOut = document.getElementById("signedOut");
+    const signedIn = document.getElementById("signedIn");
+    const welcome = document.getElementById("welcome");
+
+    loginBtn.addEventListener("click", async () => {
+      loginBtn.disabled = true;
+      status.textContent = "Menghubungkan ke Google...";
+      try {
+        await signInWithPopup(auth, provider);
+      } catch (error) {
+        status.textContent = "Login gagal: " + error.message;
+      } finally {
+        loginBtn.disabled = false;
+      }
+    });
+
+    logoutBtn.addEventListener("click", async () => {
+      try {
+        await signOut(auth);
+        status.textContent = "Kamu sudah keluar.";
+      } catch (error) {
+        status.textContent = "Gagal keluar: " + error.message;
+      }
+    });
+
+    onAuthStateChanged(auth, (user) => {
+      signedOut.hidden = !!user;
+      signedIn.hidden = !user;
+
+      if (user) {
+        welcome.textContent =
+          "Login sebagai " + (user.displayName || user.email);
+        status.textContent = "Autentikasi berhasil.";
+      } else {
+        welcome.textContent = "";
+        status.textContent = "Silakan masuk menggunakan akun Google.";
+      }
+    });
+  </script>
+</body>
+</html>
