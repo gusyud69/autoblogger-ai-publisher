@@ -297,7 +297,45 @@
             saveStatus.textContent = "Gagal menghapus: " + error.message;
           }
         });
-        actions.append(editBtn, deleteBtn);
+        const bloggerBtn = document.createElement("button");
+        bloggerBtn.className = "primary";
+        bloggerBtn.type = "button";
+        bloggerBtn.textContent = "Kirim ke Blogger (Draft)";
+        bloggerBtn.addEventListener("click", async () => {
+          if (!currentUser) {
+            saveStatus.textContent = "Silakan login kembali.";
+            return;
+          }
+          if (!confirm('Kirim "' + (article.title || "Tanpa judul") + '" ke Blogger sebagai DRAFT? Artikel tidak akan diterbitkan langsung.')) return;
+          bloggerBtn.disabled = true;
+          bloggerBtn.textContent = "Mengirim permintaan...";
+          saveStatus.textContent = "Mengirim permintaan ke backend Blogger...";
+          try {
+            const idToken = await currentUser.getIdToken();
+            await fetch("https://script.google.com/macros/s/AKfycbxv81-EjcJNv0b34bDnbocb5GFNJ6FQBlcQ2PNwZdfXXzsoWTdlhlHYfCi5oOAuyMcsMA/exec", {
+              method: "POST",
+              mode: "no-cors",
+              headers: { "Content-Type": "text/plain;charset=UTF-8" },
+              body: JSON.stringify({
+                idToken: idToken,
+                articleId: id,
+                title: article.title || "",
+                body: article.body || "",
+                labels: Array.isArray(article.labels) ? article.labels : []
+              })
+            });
+            saveStatus.textContent = "Permintaan sudah dikirim, tetapi browser tidak dapat membaca respons backend. Buka Blogger → Draft untuk memastikan hasilnya sebelum mencoba lagi.";
+            bloggerBtn.textContent = "Cek Blogger Draft";
+            bloggerBtn.disabled = false;
+            bloggerBtn.onclick = () => window.open("https://www.blogger.com/blog/posts/4231572169929702796", "_blank", "noopener");
+            bloggerBtn.title = "Buka Blogger untuk memeriksa apakah draf berhasil dibuat.";
+          } catch (error) {
+            saveStatus.textContent = "Pengiriman gagal dari browser: " + (error.message || "kesalahan jaringan");
+            bloggerBtn.disabled = false;
+            bloggerBtn.textContent = "Coba Kirim ke Blogger (Draft)";
+          }
+        });
+        actions.append(editBtn, deleteBtn, bloggerBtn);
         card.appendChild(actions);
         articleList.appendChild(card);
       }
