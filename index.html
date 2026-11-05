@@ -325,10 +325,9 @@
               })
             });
             saveStatus.textContent = "Permintaan sudah dikirim, tetapi browser tidak dapat membaca respons backend. Buka Blogger → Draft untuk memastikan hasilnya sebelum mencoba lagi.";
-            bloggerBtn.textContent = "Cek Blogger Draft";
-            bloggerBtn.disabled = false;
-            bloggerBtn.onclick = () => window.open("https://www.blogger.com/blog/posts/4231572169929702796", "_blank", "noopener");
-            bloggerBtn.title = "Buka Blogger untuk memeriksa apakah draf berhasil dibuat.";
+            bloggerBtn.textContent = "Permintaan terkirim — periksa Blogger";
+            bloggerBtn.disabled = true;
+            bloggerBtn.title = "Browser tidak dapat memastikan hasil. Periksa Blogger Drafts sebelum mencoba lagi.";
           } catch (error) {
             saveStatus.textContent = "Pengiriman gagal dari browser: " + (error.message || "kesalahan jaringan");
             bloggerBtn.disabled = false;
