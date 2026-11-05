@@ -251,6 +251,12 @@
         status.className = "pill";
         status.textContent = article.status === "scheduled" ? "Terjadwal (belum dipublikasikan)" : "Draft";
         card.appendChild(status);
+        if (article.bloggerSubmissionRequestedAt) {
+          const bloggerStatus = document.createElement("p");
+          bloggerStatus.className = "meta";
+          bloggerStatus.textContent = "Blogger: permintaan pernah dikirim pada " + formatDate(article.bloggerSubmissionRequestedAt) + " — status belum terverifikasi. Periksa daftar Draft Blogger sebelum mengirim ulang.";
+          card.appendChild(bloggerStatus);
+        }
         const schedule = document.createElement("p");
         schedule.className = "meta";
         schedule.textContent = "Rencana terbit: " + formatDate(article.scheduledAt);
@@ -300,7 +306,10 @@
         const bloggerBtn = document.createElement("button");
         bloggerBtn.className = "primary";
         bloggerBtn.type = "button";
-        bloggerBtn.textContent = "Kirim ke Blogger (Draft)";
+        const alreadyRequested = Boolean(article.bloggerSubmissionRequestedAt);
+        bloggerBtn.textContent = alreadyRequested ? "Permintaan pernah dikirim — periksa Blogger" : "Kirim ke Blogger (Draft)";
+        bloggerBtn.disabled = alreadyRequested;
+        if (alreadyRequested) bloggerBtn.title = "Ini bukan konfirmasi berhasil. Periksa Blogger Drafts sebelum mencoba tindakan lain.";
         bloggerBtn.addEventListener("click", async () => {
           if (!currentUser) {
             saveStatus.textContent = "Silakan login kembali.";
@@ -324,10 +333,21 @@
                 labels: Array.isArray(article.labels) ? article.labels : []
               })
             });
-            saveStatus.textContent = "Permintaan sudah dikirim, tetapi browser tidak dapat membaca respons backend. Buka Blogger → Draft untuk memastikan hasilnya sebelum mencoba lagi.";
-            bloggerBtn.textContent = "Permintaan terkirim — periksa Blogger";
+            // Simpan catatan percobaan agar tombol tetap terkunci setelah dashboard dimuat ulang.
+            // Ini mencatat permintaan, bukan konfirmasi bahwa Blogger berhasil membuat draf.
+            const requestTime = Date.now();
+            try {
+              await update(ref(db, "articles/" + currentUser.uid + "/" + id), {
+                bloggerSubmissionRequestedAt: requestTime,
+                bloggerSubmissionStatus: "request_sent_unverified"
+              });
+            } catch (recordError) {
+              console.warn("Permintaan mungkin terkirim, tetapi catatan percobaan tidak tersimpan:", recordError);
+            }
+            saveStatus.textContent = "Permintaan dikirim. Browser tidak dapat membaca konfirmasi backend. Periksa Blogger → Draft sebelum mencoba lagi.";
+            bloggerBtn.textContent = "Permintaan pernah dikirim — periksa Blogger";
             bloggerBtn.disabled = true;
-            bloggerBtn.title = "Browser tidak dapat memastikan hasil. Periksa Blogger Drafts sebelum mencoba lagi.";
+            bloggerBtn.title = "Status belum terverifikasi. Periksa Blogger Drafts sebelum mengirim ulang.";
           } catch (error) {
             saveStatus.textContent = "Pengiriman gagal dari browser: " + (error.message || "kesalahan jaringan");
             bloggerBtn.disabled = false;
