@@ -313,10 +313,21 @@
         const bloggerBtn = document.createElement("button");
         bloggerBtn.className = "primary";
         bloggerBtn.type = "button";
-        const alreadyRequested = Boolean(article.bloggerSubmissionRequestedAt);
-        bloggerBtn.textContent = alreadyRequested ? "Permintaan pernah dikirim — periksa Blogger" : "Kirim ke Blogger (Draft)";
+        // Kirim ulang hanya dibuka jika backend secara eksplisit mengonfirmasi kegagalan.
+        // Status menunggu/berhasil tetap terkunci agar klik ulang tidak membuat draf ganda.
+        const confirmedFailure = article.bloggerSubmissionStatus === "failed";
+        const alreadyRequested = Boolean(article.bloggerSubmissionRequestedAt) && !confirmedFailure;
+        bloggerBtn.textContent = confirmedFailure
+          ? "Coba Kirim Ulang (Gagal Terkonfirmasi)"
+          : alreadyRequested
+            ? "Permintaan pernah dikirim — periksa Blogger"
+            : "Kirim ke Blogger (Draft)";
         bloggerBtn.disabled = alreadyRequested;
-        if (alreadyRequested) bloggerBtn.title = "Ini bukan konfirmasi berhasil. Periksa Blogger Drafts sebelum mencoba tindakan lain.";
+        if (confirmedFailure) {
+          bloggerBtn.title = "Backend mengonfirmasi kegagalan. Anda dapat mencoba lagi; backend tetap memeriksa ID draf untuk mencegah duplikasi.";
+        } else if (alreadyRequested) {
+          bloggerBtn.title = "Permintaan sudah pernah dikirim. Jangan kirim ulang sebelum status backend terkonfirmasi atau draf diperiksa.";
+        }
         bloggerBtn.addEventListener("click", async () => {
           if (!currentUser) {
             saveStatus.textContent = "Silakan login kembali.";
