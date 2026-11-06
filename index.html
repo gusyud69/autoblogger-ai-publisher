@@ -77,22 +77,27 @@
             <label for="articleBody">Isi artikel *</label>
             <textarea id="articleBody" required placeholder="Tulis atau tempel isi artikel di sini..."></textarea>
           </div>
-          <div class="grid">
-            <div class="field">
-              <label for="articleLabels">Label (pisahkan dengan koma)</label>
-              <input id="articleLabels" placeholder="Teknologi, Tips">
-            </div>
-            <div class="field">
-              <label for="publishAt">Rencana tanggal dan waktu terbit</label>
-              <input id="publishAt" type="datetime-local">
-            </div>
+          <div class="field">
+            <label for="articleLabels">Kategori utama *</label>
+            <select id="articleLabels" required>
+              <option value="" selected disabled>Pilih satu kategori</option>
+              <option value="World">World</option>
+              <option value="Politics">Politics</option>
+              <option value="Business">Business</option>
+              <option value="Technology">Technology</option>
+              <option value="Science">Science</option>
+              <option value="Health">Health</option>
+              <option value="Culture">Culture</option>
+              <option value="Explainers">Explainers</option>
+            </select>
+            <p class="muted">Pilih tepat satu kategori. Pada tahap MVP, artikel dikirim ke Blogger sebagai draft untuk diperiksa.</p>
           </div>
           <div class="actions">
             <button class="primary" id="saveBtn" type="submit">Simpan Artikel</button>
             <button class="secondary" id="cancelEditBtn" type="button" hidden>Batal mengedit</button>
           </div>
           <p id="saveStatus" class="status" role="status"></p>
-          <p class="muted">Tahap ini menyimpan artikel ke database. Jadwal yang dicatat belum menerbitkan artikel otomatis ke Blogger; integrasi publikasi akan dibuat setelah fitur ini diuji.</p>
+          <p class="muted">Artikel disimpan di Firebase. Pengiriman ke Blogger hanya membuat draft; penerbitan otomatis belum diaktifkan.</p>
         </form>
       </section>
 
@@ -185,21 +190,19 @@
       }
       const title = $("articleTitle").value.trim();
       const body = $("articleBody").value.trim();
-      const labels = $("articleLabels").value.split(",").map(x => x.trim()).filter(Boolean);
-      const localSchedule = $("publishAt").value;
+      const labels = $("articleLabels").value ? [$("articleLabels").value] : [];
       if (!title || !body) {
         saveStatus.textContent = "Judul dan isi artikel wajib diisi.";
         return;
       }
 
       const now = Date.now();
-      const scheduledAt = localSchedule ? new Date(localSchedule).getTime() : null;
       const article = {
         title,
         body,
         labels,
-        scheduledAt: Number.isFinite(scheduledAt) ? scheduledAt : null,
-        status: scheduledAt && scheduledAt > now ? "scheduled" : "draft",
+        scheduledAt: null,
+        status: "draft",
         updatedAt: now
       };
 
@@ -249,7 +252,7 @@
         card.appendChild(heading);
         const status = document.createElement("span");
         status.className = "pill";
-        status.textContent = article.status === "scheduled" ? "Terjadwal (belum dipublikasikan)" : "Draft";
+        status.textContent = article.status === "scheduled" ? "Jadwal tersimpan (fitur belum aktif)" : "Draft";
         card.appendChild(status);
         if (article.bloggerSubmissionStatus) {
           const bloggerStatus = document.createElement("p");
@@ -268,7 +271,9 @@
         }
         const schedule = document.createElement("p");
         schedule.className = "meta";
-        schedule.textContent = "Rencana terbit: " + formatDate(article.scheduledAt);
+        schedule.textContent = article.scheduledAt
+          ? "Catatan jadwal (belum aktif): " + formatDate(article.scheduledAt)
+          : "Mode publikasi: draft manual";
         card.appendChild(schedule);
         if (Array.isArray(article.labels) && article.labels.length) {
           const labels = document.createElement("p");
@@ -290,8 +295,7 @@
           editingId = id;
           $("articleTitle").value = article.title || "";
           $("articleBody").value = article.body || "";
-          $("articleLabels").value = (article.labels || []).join(", ");
-          $("publishAt").value = article.scheduledAt ? new Date(article.scheduledAt - new Date(article.scheduledAt).getTimezoneOffset()*60000).toISOString().slice(0,16) : "";
+          $("articleLabels").value = (article.labels || []).length === 1 ? article.labels[0] : "";
           $("formHeading").textContent = "Edit artikel";
           saveBtn.textContent = "Simpan Perubahan";
           cancelEditBtn.hidden = false;
@@ -319,14 +323,11 @@
         // Status menunggu/berhasil tetap terkunci agar klik ulang tidak membuat draf ganda.
         const confirmedFailure = article.bloggerSubmissionStatus === "failed";
         const alreadyRequested = Boolean(article.bloggerSubmissionRequestedAt) && !confirmedFailure;
-        const hasFutureSchedule = Number(article.scheduledAt) > Date.now();
         bloggerBtn.textContent = confirmedFailure
           ? "Coba Kirim Ulang (Gagal Terkonfirmasi)"
           : alreadyRequested
             ? "Permintaan pernah dikirim — periksa Blogger"
-            : hasFutureSchedule
-              ? "Kirim & Jadwalkan ke Blogger"
-              : "Kirim ke Blogger (Draft)";
+            : "Kirim ke Blogger (Draft)";
         bloggerBtn.disabled = alreadyRequested;
         if (confirmedFailure) {
           bloggerBtn.title = "Backend mengonfirmasi kegagalan. Anda dapat mencoba lagi; backend tetap memeriksa ID draf untuk mencegah duplikasi.";
@@ -338,10 +339,9 @@
             saveStatus.textContent = "Silakan login kembali.";
             return;
           }
-          const scheduledAt = Number(article.scheduledAt) > Date.now() ? Number(article.scheduledAt) : null;
-          const confirmationMessage = scheduledAt
-            ? 'Kirim "' + (article.title || "Tanpa judul") + '" ke Blogger dan jadwalkan publikasi pada ' + formatDate(scheduledAt) + '? Artikel tidak akan terbit sebelum jadwal tersebut.'
-            : 'Kirim "' + (article.title || "Tanpa judul") + '" ke Blogger sebagai DRAFT? Artikel tidak akan diterbitkan langsung.';
+          const confirmationMessage =
+            'Kirim "' + (article.title || "Tanpa judul") +
+            '" ke Blogger sebagai DRAFT? Artikel tidak akan diterbitkan langsung.';
           if (!confirm(confirmationMessage)) return;
           bloggerBtn.disabled = true;
           bloggerBtn.textContent = "Mengirim permintaan...";
@@ -364,8 +364,7 @@
                 articleId: id,
                 title: article.title || "",
                 body: article.body || "",
-                labels: Array.isArray(article.labels) ? article.labels : [],
-                scheduledAt: scheduledAt
+                labels: Array.isArray(article.labels) ? article.labels : []
               })
             });
             saveStatus.textContent = "Permintaan dikirim. Browser tidak dapat membaca konfirmasi backend. Periksa Blogger → Draft sebelum mencoba lagi.";
