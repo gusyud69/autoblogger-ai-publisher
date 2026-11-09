@@ -196,6 +196,7 @@
         return;
       }
 
+      const wasEditing = Boolean(editingId);
       const now = Date.now();
       const article = {
         title,
@@ -220,7 +221,9 @@
           saveStatus.textContent = "Artikel berhasil disimpan ke database.";
         }
         resetForm();
-        saveStatus.textContent = editingId ? "Perubahan artikel berhasil disimpan." : "Artikel berhasil disimpan ke database.";
+        saveStatus.textContent = wasEditing
+          ? "Perubahan artikel berhasil disimpan."
+          : "Artikel berhasil disimpan ke database.";
       } catch (error) {
         saveStatus.textContent = "Gagal menyimpan: " + error.message;
       } finally {
