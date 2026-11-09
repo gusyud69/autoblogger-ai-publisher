@@ -257,14 +257,34 @@
         choose.style.marginTop = "10px";
         choose.textContent = "Pilih berita ini";
         choose.addEventListener("click", () => {
-          newsCandidates.querySelectorAll(".candidate").forEach((el) => el.classList.remove("selected"));
+          newsCandidates.querySelectorAll(".candidate").forEach((el) => {
+            el.classList.remove("selected");
+            const oldBadge = el.querySelector(".selection-note");
+            if (oldBadge) oldBadge.remove();
+          });
           card.classList.add("selected");
           selectedNewsStory = story;
           $("articleLabels").value = story.category || "World";
           generateArticleBtn.disabled = false;
-          researchStatus.textContent = "Berita dipilih. Buka sumber asli dan lanjutkan generator setelah memeriksa relevansinya.";
+          choose.textContent = "Berita dipilih ✓";
+          const note = document.createElement("p");
+          note.className = "selection-note meta";
+          note.textContent = "TERPILIH — gunakan tombol Generate Artikel AI di bagian atas panel ini.";
+          card.appendChild(note);
+          researchStatus.textContent = "Berita dipilih: " + (story.title || "Untitled story") + ". Tombol Generate Artikel AI sudah aktif di atas daftar berita.";
         });
         card.appendChild(choose);
+        const quickGenerate = document.createElement("button");
+        quickGenerate.type = "button";
+        quickGenerate.className = "primary";
+        quickGenerate.style.marginTop = "10px";
+        quickGenerate.style.marginLeft = "8px";
+        quickGenerate.textContent = "Pilih & Generate Artikel AI";
+        quickGenerate.addEventListener("click", () => {
+          choose.click();
+          generateArticleBtn.click();
+        });
+        card.appendChild(quickGenerate);
         newsCandidates.appendChild(card);
       });
     }
