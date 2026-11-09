@@ -33,6 +33,13 @@
     .status { min-height:24px; font-size:14px; overflow-wrap:anywhere; }
     .muted { color:var(--muted);font-size:13px; }
     .article { border:1px solid var(--line); border-radius:12px; padding:16px; margin-top:12px; background:#101a2b; }
+    .candidate-list { display:grid; gap:10px; margin-top:12px; }
+    .candidate { border:1px solid var(--line); border-radius:10px; padding:13px; background:#101a2b; }
+    .candidate h3 { margin:0 0 7px; font-size:15px; line-height:1.45; }
+    .candidate .meta { margin:5px 0; }
+    .candidate.selected { border-color:#60a5fa; outline:1px solid #60a5fa; }
+    .candidate a { color:#93c5fd; overflow-wrap:anywhere; }
+
     .article h3 { margin:0 0 8px;font-size:17px;overflow-wrap:anywhere; }
     .article p { margin:6px 0;white-space:pre-wrap;overflow-wrap:anywhere; }
     .meta { font-size:12px;color:#9fb0c8; }
@@ -101,6 +108,24 @@
         </form>
       </section>
 
+      <section class="panel" id="researchPanel">
+        <h2>Riset Berita & Generator AI</h2>
+        <p class="muted">Temukan kandidat berita melalui Google News RSS, pilih satu, lalu buat draf artikel bahasa Inggris untuk ditinjau. Headline RSS bukan verifikasi fakta; periksa sumber asli sebelum menerbitkan.</p>
+        <div class="actions">
+          <button class="primary" id="discoverNewsBtn" type="button">Cari Berita Aktual</button>
+          <button class="secondary" id="generateArticleBtn" type="button" disabled>Generate Artikel AI</button>
+        </div>
+        <p id="researchStatus" class="status" role="status"></p>
+        <div id="newsCandidates" class="candidate-list"></div>
+        <div id="aiReview" hidden>
+          <h3>Catatan editorial dan pemeriksaan fakta</h3>
+          <p id="aiWordCount" class="meta"></p>
+          <p id="aiSourceNotes"></p>
+          <p id="aiFactCheck" style="white-space:pre-wrap"></p>
+          <p class="muted">Hasil AI akan dimasukkan ke formulir artikel. Periksa klaim, tanggal, kutipan, sumber asli, dan orisinalitas sebelum klik Simpan Artikel lalu kirim sebagai draf Blogger.</p>
+        </div>
+      </section>
+
       <section class="panel">
         <h2>Artikel tersimpan <span id="articleCount" class="pill">0 artikel</span></h2>
         <p class="muted">Daftar ini hanya memuat artikel milik akun yang sedang login.</p>
@@ -151,6 +176,144 @@
     let editingId = null;
     let unsubscribeArticles = null;
     let cachedArticles = {};
+    let selectedNewsStory = null;
+    let activeJobUnsubscribe = null;
+    const researchStatus = $("researchStatus");
+    const newsCandidates = $("newsCandidates");
+    const discoverNewsBtn = $("discoverNewsBtn");
+    const generateArticleBtn = $("generateArticleBtn");
+    const aiReview = $("aiReview");
+
+    function makeJobId() {
+      return "job_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 10);
+    }
+
+    async function submitAiJob(payload, modeLabel, onComplete) {
+      if (!currentUser) throw new Error("Silakan login kembali.");
+      if (activeJobUnsubscribe) activeJobUnsubscribe();
+      const jobId = makeJobId();
+      const jobRef = ref(db, "aiJobs/" + currentUser.uid + "/" + jobId);
+      researchStatus.textContent = modeLabel + " — menunggu backend...";
+      activeJobUnsubscribe = onValue(jobRef, (snapshot) => {
+        const job = snapshot.val();
+        if (!job) return;
+        if (job.status === "complete") {
+          researchStatus.textContent = modeLabel + " — selesai.";
+          if (activeJobUnsubscribe) { activeJobUnsubscribe(); activeJobUnsubscribe = null; }
+          onComplete(job);
+        } else if (job.status === "failed") {
+          researchStatus.textContent = "Gagal: " + (job.error || "Backend gagal memproses pekerjaan.");
+          if (activeJobUnsubscribe) { activeJobUnsubscribe(); activeJobUnsubscribe = null; }
+          discoverNewsBtn.disabled = false;
+          generateArticleBtn.disabled = !selectedNewsStory;
+        } else if (job.status === "processing") {
+          researchStatus.textContent = "AI sedang menyusun artikel. Mohon tunggu...";
+        }
+      }, (error) => {
+        researchStatus.textContent = "Tidak dapat membaca status pekerjaan: " + error.message;
+        discoverNewsBtn.disabled = false;
+        generateArticleBtn.disabled = !selectedNewsStory;
+      });
+      const idToken = await currentUser.getIdToken();
+      try {
+        await fetch("https://script.google.com/macros/s/AKfycbxv81-EjcJNv0b34bDnbocb5GFNJ6FQBlcQ2PNwZdfXXzsoWTdlhlHYfCi5oOAuyMcsMA/exec", {
+          method: "POST", mode: "no-cors",
+          headers: { "Content-Type": "text/plain;charset=UTF-8" },
+          body: JSON.stringify({ ...payload, jobId, idToken })
+        });
+      } catch (error) {
+        if (activeJobUnsubscribe) { activeJobUnsubscribe(); activeJobUnsubscribe = null; }
+        throw new Error("Tidak dapat menghubungi backend: " + error.message);
+      }
+    }
+
+    function renderCandidates(candidates) {
+      newsCandidates.replaceChildren();
+      selectedNewsStory = null;
+      generateArticleBtn.disabled = true;
+      if (!Array.isArray(candidates) || !candidates.length) {
+        newsCandidates.textContent = "Tidak ada kandidat berita yang ditemukan. Coba lagi nanti.";
+        return;
+      }
+      candidates.forEach((story) => {
+        const card = document.createElement("article");
+        card.className = "candidate";
+        const title = document.createElement("h3");
+        title.textContent = story.title || "Untitled story";
+        card.appendChild(title);
+        const meta = document.createElement("p");
+        meta.className = "meta";
+        meta.textContent = (story.category || "News") + " · " + (story.source || "Publisher unknown") + " · " + (story.publishedAt || "Date unavailable");
+        card.appendChild(meta);
+        const link = document.createElement("a");
+        link.href = story.url;
+        link.target = "_blank";
+        link.rel = "noopener noreferrer";
+        link.textContent = "Buka sumber / berita asli";
+        card.appendChild(link);
+        const choose = document.createElement("button");
+        choose.type = "button";
+        choose.className = "secondary";
+        choose.style.marginTop = "10px";
+        choose.textContent = "Pilih berita ini";
+        choose.addEventListener("click", () => {
+          newsCandidates.querySelectorAll(".candidate").forEach((el) => el.classList.remove("selected"));
+          card.classList.add("selected");
+          selectedNewsStory = story;
+          $("articleLabels").value = story.category || "World";
+          generateArticleBtn.disabled = false;
+          researchStatus.textContent = "Berita dipilih. Buka sumber asli dan lanjutkan generator setelah memeriksa relevansinya.";
+        });
+        card.appendChild(choose);
+        newsCandidates.appendChild(card);
+      });
+    }
+
+    discoverNewsBtn.addEventListener("click", async () => {
+      discoverNewsBtn.disabled = true;
+      generateArticleBtn.disabled = true;
+      newsCandidates.replaceChildren();
+      aiReview.hidden = true;
+      try {
+        await submitAiJob({ mode: "discover_news" }, "Mengambil berita aktual", (job) => {
+          renderCandidates(job.candidates || []);
+          discoverNewsBtn.disabled = false;
+          researchStatus.textContent = "Ditemukan " + (job.count || 0) + " kandidat. Pilih berita dan periksa sumber asli.";
+        });
+      } catch (error) {
+        researchStatus.textContent = error.message;
+        discoverNewsBtn.disabled = false;
+      }
+    });
+
+    generateArticleBtn.addEventListener("click", async () => {
+      if (!selectedNewsStory) return;
+      generateArticleBtn.disabled = true;
+      discoverNewsBtn.disabled = true;
+      aiReview.hidden = true;
+      try {
+        await submitAiJob({ mode: "generate_article", story: selectedNewsStory }, "Menyusun artikel AI", (job) => {
+          $("articleTitle").value = job.title || selectedNewsStory.title;
+          $("articleBody").value = job.body || "";
+          $("articleLabels").value = job.category || selectedNewsStory.category || "World";
+          $("formHeading").textContent = "Tinjau artikel hasil AI";
+          $("saveStatus").textContent = "Artikel AI belum disimpan. Periksa fakta dan sumber terlebih dahulu, lalu klik Simpan Artikel.";
+          $("aiWordCount").textContent = "Jumlah kata: " + (job.wordCount || 0) + " · Status: WAJIB DITINJAU EDITOR";
+          $("aiSourceNotes").textContent = "Sumber: " + ((job.source && job.source.publisher) || "Unknown") + " — " + ((job.source && job.source.url) || "");
+          $("aiFactCheck").textContent = "Catatan sumber:\n" + (job.sourceNotes || "Tidak ada catatan tambahan.") + "\n\nDaftar pemeriksaan fakta:\n" + (job.factCheckChecklist || "Periksa semua klaim terhadap sumber asli dan sumber independen.");
+          aiReview.hidden = false;
+          researchStatus.textContent = "Artikel dibuat dan dimasukkan ke formulir. Belum disimpan atau dikirim ke Blogger.";
+          discoverNewsBtn.disabled = false;
+          generateArticleBtn.disabled = false;
+          $("articleTitle").focus();
+          window.scrollTo({ top: 0, behavior: "smooth" });
+        });
+      } catch (error) {
+        researchStatus.textContent = error.message;
+        discoverNewsBtn.disabled = false;
+        generateArticleBtn.disabled = false;
+      }
+    });
 
     loginBtn.addEventListener("click", async () => {
       loginBtn.disabled = true;
